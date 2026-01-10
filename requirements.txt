@@ -1,4 +1,5 @@
 fastapi[all]
 uvicorn
 pdfplumber
-python-multipart
+apscheduler
+httpx

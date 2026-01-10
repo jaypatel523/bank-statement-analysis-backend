@@ -1,19 +1,57 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.background import BackgroundScheduler
+from contextlib import asynccontextmanager
 import pdfplumber
 import io
 import csv
 import re
+import os
+import httpx
 from datetime import datetime, timedelta
 from collections import defaultdict
 import tempfile
 
-app = FastAPI(title="Bank PDF → CSV API")
+# Get the base URL from environment variable or use default
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
-# Add CORS middleware to allow requests from the frontend during development.
-# In production, restrict origins to your frontend domain instead of using "*".
-from fastapi.middleware.cors import CORSMiddleware
+# Initialize scheduler
+scheduler = BackgroundScheduler()
 
+async def ping_self():
+    """Ping the health endpoint to keep the server alive"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{BASE_URL}/health", timeout=5.0)
+            print(f"Self-ping successful: {response.status_code}")
+    except Exception as e:
+        print(f"Self-ping failed: {e}")
+
+def sync_ping():
+    """Synchronous wrapper for the async ping function"""
+    import asyncio
+    try:
+        asyncio.run(ping_self())
+    except Exception as e:
+        print(f"Error in sync_ping: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start the scheduler
+    scheduler.add_job(sync_ping, 'interval', seconds=10, id='keep_alive')
+    scheduler.start()
+    print("Keep-alive scheduler started - pinging every 10 seconds")
+    
+    yield
+    
+    # Shutdown: Stop the scheduler
+    scheduler.shutdown()
+    print("Scheduler stopped")
+
+app = FastAPI(title="Bank PDF → CSV API", lifespan=lifespan)
+
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -23,15 +61,18 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://localhost:5173",
-        "http://127.0.0.1:5500",  # common simple static server port
+        "http://127.0.0.1:5500",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# If you test by opening the HTML file directly (file://), the browser origin will be "null" and CORS
-# will block requests. For file:// testing either serve the frontend with a local HTTP server or
-# temporarily set allow_origins=["*"] for development (not recommended for production).
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for keep-alive pings"""
+    return {"status": "alive", "message": "Server is running"}
 
 
 def clean_amount(s: str) -> int:

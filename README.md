@@ -27,25 +27,29 @@ bank-statement-api
 ## Setup Instructions
 
 1. **Clone the repository**:
+
    ```bash
    git clone <repository-url>
    cd bank-statement-api
    ```
 
 2. **Create a virtual environment**:
+
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
    ```
 
 3. **Install dependencies**:
+
    ```bash
    pip install -r requirements.txt
    ```
 
 4. **Run the application**:
+
    ```bash
-   uvicorn src.main:app --reload
+   uvicorn main:app --reload
    ```
 
 5. **Access the API**:
